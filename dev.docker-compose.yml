@@ -1,8 +1,8 @@
 version: '3'
 
 services:
-  check-and-update:
-    container_name: check-and-update
+  relay-you-ip:
+    container_name: relay-you-ip
     restart: always
     build:
       context: .
