@@ -1,0 +1,15 @@
+version: '3'
+
+services:
+  check-and-update:
+    container_name: check-and-update
+    restart: always
+    build:
+      context: .
+    env_file:
+      - .env
+    volumes:
+      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro
+      - /etc/localtime:/etc/localtime:ro
+      - ./check_and_update.sh:/app/check_and_update.sh
+      - ./msmtprc.template:/app/.msmtprc.template
