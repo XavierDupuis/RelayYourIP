@@ -1,0 +1,11 @@
+version: '3'
+
+services:
+  relay-your-ip:
+    image: ghcr.io/xavierdupuis/relayyourip:main
+    container_name: relay-your-ip
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
