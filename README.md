@@ -92,16 +92,41 @@ To integrate RelayYourIP using Docker Compose, follow these steps:
 
     This will start RelayYourIP as a background service.
 
-3. **Expected Email Notification format**
+3. **Expected behavior**
 
-    ```bash
-    From: your_email@example.com
-    Subject: [YourServerName] IP Address Change Notification
+    - Email format:
 
-    January 1, 1970 12:30 PM (UTC)
+      ```bash
+      From: your_email@example.com
+      Subject: [YourServerName] IP Address Change Notification
 
-    123.45.67.89
-    ```
+      January 1, 1970 12:30 PM (UTC)
+
+      123.45.67.89
+      ```
+
+## Development
+
+### Using the Development Environment
+
+Developers can use the `dev.docker-compose.yml` file to set up the development environment. This file includes configurations tailored for development purposes.
+
+```bash
+docker-compose -f dev.docker-compose.yml up --build
+```
+
+The `--build` flag ensures that the Docker image is rebuilt, incorporating any changes made to the source code.
+
+**Note**: Ensure creating a `.env` file with the required environment variables before running the command above.
+
+### Troubleshooting
+
+If you encounter issues or want to explore further configurations, refer to the [Docker Compose documentation](https://docs.docker.com/compose/).
+
+---
+
+Feel free to customize this section further based on your specific development practices and requirements.
+
 
 ## License
 
