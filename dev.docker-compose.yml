@@ -1,8 +1,8 @@
 version: '3'
 
 services:
-  relay-you-ip:
-    container_name: relay-you-ip
+  dev-relay-your-ip:
+    container_name: dev-relay-your-ip
     restart: always
     build:
       context: .
