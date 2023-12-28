@@ -11,5 +11,3 @@ services:
     volumes:
       - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro
       - /etc/localtime:/etc/localtime:ro
-      - ./check_and_update.sh:/app/check_and_update.sh
-      - ./msmtprc.template:/app/.msmtprc.template
