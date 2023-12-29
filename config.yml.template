@@ -1,0 +1,5 @@
+actions:
+  - description: "Update Dynamic DNS at afraid.org"
+    command: "curl -s http://sync.afraid.org/u/<token>"
+  - description: "Update Dynamic DNS at duckdns.org"
+    command: "curl -s https://www.duckdns.org/update?domains=<domain>&token=<token>&ip=$UPDATED_IP"
