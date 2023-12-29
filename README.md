@@ -6,6 +6,7 @@ RelayYourIP is a lightweight tool designed to monitor and relay changes in your 
 
 - Periodically checks for changes in the public IP address.
 - Sends instant notifications upon detection of modifications.
+- Supports custom actions to be executed when the IP address changes.
 - Simple and easy-to-use for enhanced network efficiency.
 
 
@@ -22,6 +23,25 @@ RelayYourIP is a lightweight tool designed to monitor and relay changes in your 
 - `MSMTP_PASSWORD`: SMTP server password.
 - `RECIPIENTS_EMAILS`: Recipient email addresses (comma-separated if multiple).
 - `CRON_SCHEDULE`: Cron job frequency for IP checks. See [crontab.guru](https://crontab.guru/)
+
+### Configuration File
+
+The `config.yml` file defines custom behavior executed when the IP address changes. Here's an example configuration :
+
+```yaml
+# config.yml
+actions:
+  - description: "Update Dynamic DNS at afraid.org"
+    command: "curl -s http://sync.afraid.org/u/<token>"
+  - description: "Update Dynamic DNS at duckdns.org"
+    command: "curl -s https://www.duckdns.org/update?domains=<domain>&token=<token>&ip=$UPDATED_IP"
+```
+
+
+**Notes**
+
+- Make sure to replace `<token>` and `<domain>` (or any other field) with your actual dynamic DNS information, if necessary.
+- The script supports dynamic substitution of the $UPDATED_IP placeholder in the commands with the actual IP address.
 
 ## Usage
 
@@ -51,6 +71,7 @@ To integrate RelayYourIP using Docker Compose, follow these steps:
             - CRON_SCHEDULE=*/30 * * * *
           volumes:
             - /etc/localtime:/etc/localtime:ro
+            - ./confg.yml/:/app/config.yml
           restart: always
       ```
 
@@ -66,6 +87,7 @@ To integrate RelayYourIP using Docker Compose, follow these steps:
             - .env
           volumes:
             - /etc/localtime:/etc/localtime:ro
+            - ./confg.yml/:/app/config.yml
           restart: always
       ```
 

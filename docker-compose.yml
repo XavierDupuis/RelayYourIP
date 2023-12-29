@@ -8,4 +8,5 @@ services:
     env_file:
       - .env
     volumes:
+      - ./config.yml:/app/config.yml:ro
       - /etc/localtime:/etc/localtime:ro
