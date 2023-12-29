@@ -1,6 +1,6 @@
 FROM alpine:latest
 
-RUN apk --no-cache add msmtp dcron gettext
+RUN apk --no-cache add msmtp dcron gettext jq yq curl
 
 WORKDIR /app
 
