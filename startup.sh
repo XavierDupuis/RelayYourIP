@@ -2,10 +2,10 @@ echo "⚡  Setting up msmtp"
 envsubst < msmtprc.template > /etc/msmtprc
 
 echo "⚡  Verifying configuration file config.yml"
-if [ -f /app/config.yml ]; then
-    echo "🟢  Found $(yq eval '.actions | length' /app/config.yml -o=json | jq -r .) actions"
+if [ -f config.yml ]; then
+    echo "🟢  Found $(yq eval '.actions | length' config.yml -o=json | jq -r .) actions"
 else
-    touch /app/config.yml
+    touch config.yml
     echo "🟠  config.yml file not found or empty. Created an empty config.yml."
 fi
 
