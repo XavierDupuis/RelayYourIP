@@ -9,6 +9,7 @@ services:
     env_file:
       - .env
     volumes:
-      - ./config.yml:/app/config.yml:ro
+      - ./data:/app/data
+      - ./config:/app/config:ro
       - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro
       - /etc/localtime:/etc/localtime:ro
