@@ -10,6 +10,6 @@ services:
       - .env
     volumes:
       - ./data:/app/data
-      - ./config:/app/config:ro
+      - ./config:/app/config
       - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro
       - /etc/localtime:/etc/localtime:ro

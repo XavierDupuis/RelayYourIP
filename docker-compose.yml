@@ -9,5 +9,5 @@ services:
       - .env
     volumes:
       - ./data:/app/data
-      - ./config:/app/config:ro
+      - ./config:/app/config
       - /etc/localtime:/etc/localtime:ro
