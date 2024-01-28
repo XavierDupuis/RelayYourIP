@@ -13,6 +13,12 @@ warn() {
 }
 
 current_ip=$(wget -qO- https://api.ipify.org)
+
+if [ -z "$current_ip" ]; then
+  warn "Failed to retrieve the current IP address."
+  exit 1
+fi
+
 # dig -4 +short myip.opendns.com @resolver1.opendns.com
 
 last_ip_file="/app/data/last_ip.txt"
