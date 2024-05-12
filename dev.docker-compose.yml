@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   dev-relay-your-ip:
     container_name: dev-relay-your-ip

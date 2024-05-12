@@ -57,7 +57,6 @@ To integrate RelayYourIP using Docker Compose, follow these steps:
 
       ```yaml
       # docker-compose.yml
-      version: '3'
       services:
         relayyourip:
           image: ghcr.io/xavierdupuis/relayyourip:main
@@ -81,7 +80,6 @@ To integrate RelayYourIP using Docker Compose, follow these steps:
 
       ```yaml
       # docker-compose.yml
-      version: '3'
       services:
         relayyourip:
           image: ghcr.io/xavierdupuis/relayyourip:main
