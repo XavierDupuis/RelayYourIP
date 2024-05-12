@@ -35,6 +35,8 @@ actions:
     command: "curl -s http://sync.afraid.org/u/<token>"
   - description: "Update Dynamic DNS at duckdns.org"
     command: "curl -s https://www.duckdns.org/update?domains=<domain>&token=<token>&ip=$UPDATED_IP"
+  - description: "Post Discord Webhook Notification"
+    command: "curl -X POST -H \"Content-Type: application/json\" -d '{ \"embeds\": [{ \"title\": \"RelayYourIP\", \"color\": 7151075, \"fields\": [{ \"name\": \"Updated server IP\", \"value\": \"$UPDATED_IP\" }] }] }' https://discord.com/api/webhooks/<channel>/<token>"
 ```
 
 
