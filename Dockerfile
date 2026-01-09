@@ -7,6 +7,6 @@ WORKDIR /app
 COPY check_and_update.sh ./
 RUN chmod +x ./check_and_update.sh
 COPY msmtprc.template ./
-COPY startup.sh ./
+COPY install.sh ./
 
-CMD ["sh", "./startup.sh"]
+CMD ["sh", "./install.sh"]
