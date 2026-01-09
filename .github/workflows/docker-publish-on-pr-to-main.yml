@@ -1,0 +1,29 @@
+name: Docker Publish on PR to Main
+
+on:
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+  
+jobs:
+  get-version:
+    uses: ./.github/workflows/get-version.yml
+
+  ensure-semver-upgrade:
+    needs: get-version
+    uses: ./.github/workflows/ensure-semver-upgrade.yml
+    with:
+      current-version: ${{ needs.get-version.outputs.version }}
+
+  build:
+    needs: [get-version, ensure-semver-upgrade]
+    if: always() && needs.ensure-semver-upgrade.result == 'success'
+    uses: ./.github/workflows/build-and-publish-docker-image.yml
+    with:
+      version: pr-${{ github.event.pull_request.number }}-on-v${{ needs.get-version.outputs.version }}
+      tags: |
+        pr-${{ github.event.pull_request.number }}-on-v${{ needs.get-version.outputs.version }}

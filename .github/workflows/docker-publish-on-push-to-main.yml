@@ -1,0 +1,34 @@
+name: Docker Publish on Push to Main
+
+# This workflow publishes to registry on pushes to main and scheduled builds
+
+on:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+jobs:
+  get-version:
+    uses: ./.github/workflows/get-version.yml
+
+  create-tag:
+    needs: get-version
+    uses: ./.github/workflows/create-git-tag.yml
+    with:
+      overwrite: true
+      version: ${{ needs.get-version.outputs.version }}
+
+  build:
+    needs: [get-version, create-tag]
+    if: success()
+    uses: ./.github/workflows/build-and-publish-docker-image.yml
+    with:
+      version: v${{ needs.get-version.outputs.version }}
+      tags: |
+        latest
+        main
+        v${{ needs.get-version.outputs.version }}

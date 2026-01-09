@@ -1,0 +1,49 @@
+name: Ensure Semver Upgrade
+
+on:
+  workflow_call:
+    inputs:
+      current-version:
+        description: "Current version to compare"
+        required: true
+        type: string
+
+jobs:
+  compare-version:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.base_ref }}
+
+      - name: Get base version
+        id: base
+        run: |
+          VERSION=$(git show origin/${{ github.base_ref }}:VERSION 2>/dev/null || echo "none")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Base version: $VERSION"
+
+      - name: Check version incremented
+        run: |
+          CURRENT="${{ inputs.current-version }}"
+          BASE="${{ steps.base.outputs.version }}"
+          
+          echo "Comparing versions:"
+          echo "  Base:    $BASE"
+          echo "  Current: $CURRENT"
+          
+          if [[ "$CURRENT" == "$BASE" ]]; then
+            echo "❌ FAILED: Version was not incremented!"
+            echo "Please update the VERSION file from $BASE to a new semver version."
+            exit 1
+          else
+            echo "✓ Version check passed: $BASE → $CURRENT"
+          fi

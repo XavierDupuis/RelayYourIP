@@ -1,0 +1,27 @@
+name: Get Version
+
+on:
+  workflow_call:
+    outputs:
+      version:
+        description: "Current version from VERSION file"
+        value: ${{ jobs.get-version.outputs.version }}
+
+jobs:
+  get-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read version from VERSION file
+        id: version
+        run: |
+          VERSION=$(cat VERSION)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
