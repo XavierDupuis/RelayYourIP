@@ -4,81 +4,94 @@ set -euo pipefail
 REMOTE="$1"
 URL="$2"
 
-# Only run when local branch is main
-current_branch=$(git rev-parse --abbrev-ref HEAD)
-if [[ "$current_branch" != "main" ]]; then
+# determine current branch
+current_branch="$(git rev-parse --abbrev-ref HEAD)"
+
+if [[ "$current_branch" != "main" && "$current_branch" != "master" ]]; then
+  # allow push on other branches
   exit 0
 fi
 
-# Read first line from stdin (pre-push provides refs lines); handle multiple lines but consider first matching refs/heads/main
-pushed_any=false
-while read -r local_ref local_sha remote_ref remote_sha; do
-  if [[ "$local_ref" =~ ^refs/heads/main$ ]]; then
-    pushed_any=true
-    push_local_sha="$local_sha"
-    push_remote_sha="$remote_sha"
-    break
-  fi
-done
+# ensure origin exists and fetch latest refs
+git remote get-url origin >/dev/null 2>&1 || { echo "Remote 'origin' not found."; exit 1; }
+git fetch origin --quiet
 
-# If nothing to push for main, exit
-if [[ "$pushed_any" != true ]]; then
-  exit 0
-fi
-
-VERSION_FILE="VERSION"
-if [[ ! -f "$VERSION_FILE" ]]; then
-  exit 0
-fi
-
-# Determine changed files in the push range
-if [[ "$push_remote_sha" == "0000000000000000000000000000000000000000" ]]; then
-  # new branch on remote: check changes in the local ref
-  changed_files=$(git diff --name-only "${push_local_sha}^" "$push_local_sha" 2>/dev/null || git ls-tree -r --name-only "$push_local_sha")
+# find the remote's branch ref (origin/main or origin/master)
+remote_branch_ref=""
+if git show-ref --verify --quiet "refs/remotes/origin/$current_branch"; then
+  remote_branch_ref="refs/remotes/origin/$current_branch"
 else
-  changed_files=$(git diff --name-only "$push_remote_sha" "$push_local_sha" 2>/dev/null || true)
-fi
-
-if echo "$changed_files" | grep -qx "$VERSION_FILE"; then
-  # VERSION was modified in the pushed commits — allow push
+  # remote branch doesn't exist yet — treat as changed (allow push)
   exit 0
 fi
 
-# Read current version
-current_version=$(sed -n '1s/^[[:space:]]*//;s/[[:space:]]*$//;p' "$VERSION_FILE")
+# find the list of commits we're about to push
+# local tip and remote tip
+local_tip="$(git rev-parse "$current_branch")"
+remote_tip="$(git rev-parse "$remote_branch_ref")"
+
+# if identical, nothing to push
+if [[ "$local_tip" == "$remote_tip" ]]; then
+  exit 0
+fi
+
+# get list of files changed between remote_tip and local_tip (only commits being pushed)
+changed_files="$(git diff --name-only "$remote_tip" "$local_tip")"
+
+# if VERSION file was modified among those changes, allow push
+if echo "$changed_files" | grep -xq "VERSION"; then
+  exit 0
+fi
+
+# At this point: pushing to main and VERSION was NOT modified. Block push.
+if [[ ! -f VERSION ]]; then
+  echo "VERSION file not found at repo root. Aborting push."
+  exit 1
+fi
+
+# read current semver
+current_version="$(tr -d ' \t\n\r' < VERSION || true)"
 if [[ -z "$current_version" ]]; then
-  echo "VERSION is empty; aborting push." >&2
+  echo "VERSION file is empty. Aborting push."
   exit 1
 fi
 
-if ! [[ "$current_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)([-+].*)?$ ]]; then
-  echo "VERSION ('$current_version') is not a valid semver MAJOR.MINOR.PATCH; aborting." >&2
+# parse semver (MAJOR.MINOR.PATCH), allow optional pre-release/build ignored
+if [[ "$current_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(.*)$ ]]; then
+  major="${BASH_REMATCH[1]}"
+  minor="${BASH_REMATCH[2]}"
+  patch="${BASH_REMATCH[3]}"
+  suffix="${BASH_REMATCH[4]}"
+else
+  echo "VERSION does not match MAJOR.MINOR.PATCH format: '$current_version'. Aborting push."
   exit 1
 fi
 
-major=${BASH_REMATCH[1]}
-minor=${BASH_REMATCH[2]}
-patch=${BASH_REMATCH[3]}
-
+# increment patch
 new_patch=$((patch + 1))
-new_version="${major}.${minor}.${new_patch}"
+new_version="${major}.${minor}.${new_patch}${suffix}"
 
-# Update VERSION file and commit locally
-printf '%s\n' "$new_version" > "$VERSION_FILE"
-git add "$VERSION_FILE"
-git commit -m "chore: bump VERSION -> ${new_version}" --no-verify
+# write new VERSION
+printf "%s\n" "$new_version" > VERSION
 
-# Inform user and abort the push so they can push the new commit themselves
-cat >&2 <<EOF
+# stage the change
+git add VERSION
 
-VERSION was not changed in your pushed commits.
-A patch bump has been committed locally: ${new_version}
+# instruct user to commit and push
+cat <<EOF
 
-Please run:
+Push blocked: you attempted to push to '$current_branch' without updating VERSION.
+VERSION was automatically bumped:
+  $current_version -> $new_version
+
+The new VERSION file has been staged. Please run:
+
+  git commit -m "Bump VERSION to $new_version"
   git push
 
-to push the bump (this hook aborted the original push to avoid race conditions).
+(If you want to change versioning behavior, modify .git/hooks/pre-push.)
 
 EOF
 
+# prevent the push
 exit 1
