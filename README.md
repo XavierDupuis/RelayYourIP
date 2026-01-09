@@ -3,11 +3,15 @@
 RelayYourIP is a lightweight tool designed to monitor and relay changes in your public IP address. It provides instant notifications, making it ideal for maintaining seamless remote access and enhancing network security.
 
 ## Features
-
-- Periodically checks for changes in the public IP address.
-- Sends instant notifications upon detection of modifications.
-- Supports custom actions to be executed when the IP address changes.
-- Simple and easy-to-use for enhanced network efficiency.
+ 
+- Actions-driven: define one or more update commands in config.yml using $UPDATED_IP placeholder.
+- Reliable IP detection: fetches public IP with retries and fallbacks.
+- Robust update execution: retries with exponential backoff, captures action status.
+- DNS propagation checks: queries multiple public resolvers (1.1.1.1, 8.8.8.8, 9.9.9.9) to verify the domain resolves to the updated IP.
+- Aggregated notifications: sends a single summary (success / partial / failure) including new IP and checklist of action results to Discord webhook and/or generic webhook
+- Concurrency safety: file-descriptor flock locking prevents overlapping runs (kernel releases lock on exit/crash).
+- Idempotent state: stores last known IP and last-notify timestamps in /app/data.
+- Small, Alpine-based Docker image; optional bind-tools (dig) for DNS checks.
 
 
 ## Configuration
@@ -15,13 +19,6 @@ RelayYourIP is a lightweight tool designed to monitor and relay changes in your 
 ### Environment Variables
 
 - `LABEL`: Label to identify your server in notifications.
-- `MSMTP_ACCOUNT`: Your msmtp account identifier.
-- `MSMTP_HOST`: SMTP server hostname.
-- `MSMTP_PORT`: SMTP server port.
-- `MSMTP_FROM`: Sender email address.
-- `MSMTP_USER`: SMTP server username.
-- `MSMTP_PASSWORD`: SMTP server password.
-- `RECIPIENTS_EMAILS`: Recipient email addresses (comma-separated if multiple).
 - `CRON_SCHEDULE`: Cron job frequency for IP checks. See [crontab.guru](https://crontab.guru/)
 
 ### Configuration File
@@ -62,13 +59,6 @@ To integrate RelayYourIP using Docker Compose, follow these steps:
           image: ghcr.io/xavierdupuis/relayyourip:main
           environment:
             - LABEL=YourServerName
-            - MSMTP_ACCOUNT=your_account
-            - MSMTP_HOST=smtp.example.com
-            - MSMTP_PORT=587
-            - MSMTP_FROM=your_email@example.com
-            - MSMTP_USER=your_username
-            - MSMTP_PASSWORD=your_password
-            - RECIPIENTS_EMAILS=recipient@example.com
             - CRON_SCHEDULE=*/30 * * * *
           volumes:
             - /etc/localtime:/etc/localtime:ro
@@ -94,13 +84,6 @@ To integrate RelayYourIP using Docker Compose, follow these steps:
       ```bash
       # .env
       LABEL=YourServerName
-      MSMTP_ACCOUNT=your_account
-      MSMTP_HOST=smtp.example.com
-      MSMTP_PORT=587
-      MSMTP_FROM=your_email@example.com
-      MSMTP_USER=your_username
-      MSMTP_PASSWORD=your_password
-      RECIPIENTS_EMAILS=recipient@example.com
       CRON_SCHEDULE=*/30 * * * *
       ```
 
@@ -116,15 +99,24 @@ To integrate RelayYourIP using Docker Compose, follow these steps:
 
 3. **Expected behavior**
 
-    - Email format:
+    - Discord:
+      ```
+      [YourServerName] DDNS update — SUCCESS
+      IP: 123.45.67.89
+      Status: SUCCESS
+      Time: 2026-01-09T19:25:02Z
+      ---
+      Action Execution Summary
+      actions: 1 (ok:1 fail:0)
+      ✓ Update Dynamic DNS at duckdns.org — OK — exit=0
+      ```
+      ```
+      [YourServerName] DDNS update — DNS_VERIFIED
+      IP: 123.45.67.89
+      Status: DNS_VERIFIED
+      Time: 2026-01-09T19:25:09Z
 
-      ```bash
-      From: your_email@example.com
-      Subject: [YourServerName] IP Address Change Notification
-
-      January 1, 1970 12:30 PM (UTC)
-
-      123.45.67.89
+      ✓ DNS @1.1.1.1 for mydomain.duckdns.org -> 123.45.67.89
       ```
 
 ## Development

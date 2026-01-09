@@ -1,5 +1,26 @@
+# list of update commands (command may include $UPDATED_IP placeholder)
 actions:
   - description: "Update Dynamic DNS at afraid.org"
-    command: "curl -s http://sync.afraid.org/u/<token>"
+    command: "curl -s 'http://sync.afraid.org/u/<token>'"
+    domain: "myfirstdomain.afraid.org"                    # OPTIONAL: FQDN to verify after update
   - description: "Update Dynamic DNS at duckdns.org"
-    command: "curl -s https://www.duckdns.org/update?domains=<domain>&token=<token>&ip=$UPDATED_IP"
+    command: "curl -s 'https://www.duckdns.org/update?domains=<domain>&token=<token>&ip=$UPDATED_IP'"
+    domain: "myseconddomain.afraid.org"                    # OPTIONAL: FQDN to verify after update
+
+# notification providers and rate-limiting
+alerting:
+  # Discord webhook notification
+  discord:
+    webhook_url: "https://discord.com/api/webhooks/..."   # set to empty string to disable
+    mention: ""                                           # optional: "<@&ROLEID>" or "<@USERID>"
+
+  # Generic webhook receiver (POST JSON). Optional.
+  webhook:
+    url: "https://example.com/notify"
+    bearer_token: ""    # optional Bearer token for Authorization header
+
+# DNS verification settings
+dns_verification:
+  enabled: true                     # enable/disable DNS propagation verification
+  max_wait_seconds: 600             # maximum time to wait for DNS propagation (default: 600s = 10min)
+  base_retry_delay_seconds: 5       # initial retry delay, doubles exponentially (default: 5s)
