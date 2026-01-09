@@ -1,9 +1,6 @@
 # Source common utilities
 . "$(dirname "$0")/utils.sh"
 
-log "Setting up msmtp"
-envsubst < msmtprc.template > /etc/msmtprc
-
 log "Verifying configuration file config.yml"
 if [ -f /app/config/config.yml ]; then
     log "Found $(yq eval '.actions | length' /app/config/config.yml -o=json | jq -r .) actions"

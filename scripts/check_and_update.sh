@@ -12,11 +12,8 @@ NOTIFY_TS_DIR="$DATA_DIR/notify_ts"
 mkdir -p "$DATA_DIR" "$NOTIFY_TS_DIR"
 
 LABEL="${LABEL:-DDNS}"
-MSMTP_ACCOUNT="${MSMTP_ACCOUNT:-default}"
-RECIPIENTS_EMAILS="${RECIPIENTS_EMAILS:-}"
-FORCE_NOTIFY="${FORCE_NOTIFY:-}"
 
-for cmd in yq jq dig curl msmtp flock; do
+for cmd in yq jq dig curl flock; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     warn "Command not found: $cmd"
   fi
@@ -153,8 +150,7 @@ sh /app/scripts/notify.sh \
   --label "$LABEL" \
   --ip "$current_ip" \
   --status "$overall_status" \
-  --checklist "$checklist_md" \
-  --msmtp-account "$MSMTP_ACCOUNT" || warn "Failed to send initial update notification."
+  --checklist "$checklist_md" || warn "Failed to send initial update notification."
 
 # Trigger background DNS verification if domains are configured
 if [ -n "$domains_to_check" ]; then

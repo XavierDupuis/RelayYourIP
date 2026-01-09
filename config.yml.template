@@ -19,11 +19,6 @@ alerting:
     url: "https://example.com/notify"
     bearer_token: ""    # optional Bearer token for Authorization header
 
-  # Email fallback via msmtp. Optional.
-  email:
-    recipients: "ops@example.com"   # comma-separated list
-    from: "ddns@example.com"
-
 # DNS verification settings
 dns_verification:
   enabled: true                     # enable/disable DNS propagation verification

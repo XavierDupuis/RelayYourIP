@@ -13,7 +13,6 @@ DOMAINS_LIST=""
 MAX_WAIT=600
 BASE_DELAY=5
 LABEL="${LABEL:-DDNS}"
-MSMTP_ACCOUNT="${MSMTP_ACCOUNT:-default}"
 RESOLVERS="1.1.1.1 8.8.8.8 9.9.9.9"
 
 # Parse arguments
@@ -128,8 +127,7 @@ while [ "$all_propagated" -eq 0 ]; do
       --label "$LABEL" \
       --ip "$TARGET_IP" \
       --status "DNS_VERIFIED" \
-      --checklist "$checklist_md" \
-      --msmtp-account "$MSMTP_ACCOUNT" || warn "Failed to send DNS verification notification."
+      --checklist "$checklist_md" || warn "Failed to send DNS verification notification."
     exit 0
   fi
   
@@ -149,6 +147,5 @@ sh /app/scripts/notify.sh \
   --label "$LABEL" \
   --ip "$TARGET_IP" \
   --status "DNS_TIMEOUT" \
-  --checklist "$checklist_md" \
-  --msmtp-account "$MSMTP_ACCOUNT" || warn "Failed to send DNS timeout notification."
+  --checklist "$checklist_md" || warn "Failed to send DNS timeout notification."
 exit 1

@@ -1,6 +1,6 @@
 #!/bin/sh
 # notify.sh - Unified notification dispatch for all channels
-# Usage: notify.sh --config <config.yml> --label <label> --ip <ip> --status <status> --checklist <checklist> [--msmtp-account <account>]
+# Usage: notify.sh --config <config.yml> --label <label> --ip <ip> --status <status> --checklist <checklist>
 
 set -eu
 
@@ -12,7 +12,6 @@ LABEL="${LABEL:-DDNS}"
 CURRENT_IP=""
 OVERALL_STATUS=""
 CHECKLIST=""
-MSMTP_ACCOUNT="${MSMTP_ACCOUNT:-default}"
 
 # Parse arguments
 while [ $# -gt 0 ]; do
@@ -35,10 +34,6 @@ while [ $# -gt 0 ]; do
       ;;
     --checklist)
       CHECKLIST="$2"
-      shift 2
-      ;;
-    --msmtp-account)
-      MSMTP_ACCOUNT="$2"
       shift 2
       ;;
     *)
@@ -109,19 +104,6 @@ if [ -n "$webhook_url" ] && [ "$webhook_url" != "null" ]; then
   else
     warn "Webhook notification failed."
   fi
-fi
-
-# Email notification
-email_recipients=$(yq eval '.alerting.email.recipients // ""' "$CONFIG_FILE" 2>/dev/null || printf "")
-email_from=$(yq eval '.alerting.email.from // ""' "$CONFIG_FILE" 2>/dev/null || printf "")
-if [ -n "$email_recipients" ] && [ "$email_recipients" != "null" ]; then
-  subject="[$LABEL] DDNS update — $OVERALL_STATUS — $CURRENT_IP"
-  body="$(printf "%s\n\n%s\n" "$summary" "$checklist_md")"
-  {
-    printf "Subject: %s\n" "$subject"
-    [ -n "$email_from" ] && printf "From: %s\n" "$email_from"
-    printf "\n%s\n" "$body"
-  } | msmtp -a "$MSMTP_ACCOUNT" "$email_recipients" >/dev/null 2>&1 && log "Email notification sent." || warn "Email notification failed."
 fi
 
 log "Notifications completed."
