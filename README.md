@@ -3,11 +3,15 @@
 RelayYourIP is a lightweight tool designed to monitor and relay changes in your public IP address. It provides instant notifications, making it ideal for maintaining seamless remote access and enhancing network security.
 
 ## Features
-
-- Periodically checks for changes in the public IP address.
-- Sends instant notifications upon detection of modifications.
-- Supports custom actions to be executed when the IP address changes.
-- Simple and easy-to-use for enhanced network efficiency.
+ 
+- Actions-driven: define one or more update commands in config.yml using $UPDATED_IP placeholder.
+- Reliable IP detection: fetches public IP with retries and fallbacks.
+- Robust update execution: retries with exponential backoff, captures action status.
+- DNS propagation checks: queries multiple public resolvers (1.1.1.1, 8.8.8.8, 9.9.9.9) to verify the domain resolves to the updated IP.
+- Aggregated notifications: sends a single summary (success / partial / failure) including new IP and checklist of action results to Discord webhook, generic webhook, and/-or email.
+- Concurrency safety: file-descriptor flock locking prevents overlapping runs (kernel releases lock on exit/crash).
+- Idempotent state: stores last known IP and last-notify timestamps in /app/data.
+- Small, Alpine-based Docker image; optional bind-tools (dig) for DNS checks.
 
 
 ## Configuration
