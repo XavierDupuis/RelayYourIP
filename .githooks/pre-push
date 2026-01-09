@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Running pre-push hook to check and bump VERSION file if needed..."
+
+REMOTE="$1"
+URL="$2"
+
+# Only run when local branch is main
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+if [[ "$current_branch" != "main" ]]; then
+  exit 0
+fi
+
+# Determine the range of commits being pushed.
+# Read refs from stdin (pre-push provides local_ref local_sha remote_ref remote_sha per line)
+# We only care about the local ref and new commits.
+read -r local_ref local_sha remote_ref remote_sha || true
+
+# If nothing to push, exit
+if [[ "$local_sha" == "0000000000000000000000000000000000000000" ]]; then
+  # branch deleted
+  exit 0
+fi
+
+# If this is a force push or non-fast-forward, still proceed with diff from remote_sha..local_sha
+# If remote_sha is 000..0 (new branch on remote), compare from empty tree
+range="$remote_sha..$local_sha"
+if [[ "$remote_sha" == "0000000000000000000000000000000000000000" ]]; then
+  range="$local_sha"
+fi
+
+VERSION_FILE="VERSION"
+
+# If file doesn't exist in repo, nothing to do
+if [[ ! -f "$VERSION_FILE" ]]; then
+  exit 0
+fi
+
+# Check whether VERSION was changed in the pushed commits
+# If range is a single commit hash (new branch), inspect that commit
+if git rev-parse --verify "$remote_sha" >/dev/null 2>&1; then
+  changed_files=$(git diff --name-only "$remote_sha" "$local_sha")
+else
+  # remote_sha not present locally (new remote branch); treat all changes in local branch vs its upstream
+  # Fall back to comparing the local branch tip vs its parent
+  changed_files=$(git diff --name-only "$local_sha^" "$local_sha" || true)
+  # If that fails (single commit or no parent), check the full tree at local_sha
+  if [[ -z "$changed_files" ]]; then
+    changed_files=$(git ls-tree -r --name-only "$local_sha")
+  fi
+fi
+
+if echo "$changed_files" | grep -qx "$VERSION_FILE"; then
+  # VERSION was modified in the push — do nothing
+  exit 0
+fi
+
+# Read current version from file (trim whitespace)
+current_version=$(sed -n '1s/^[[:space:]]*//;s/[[:space:]]*$//;p' "$VERSION_FILE")
+if [[ -z "$current_version" ]]; then
+  echo "VERSION is empty; aborting push." >&2
+  exit 1
+fi
+
+# Validate semver simple form MAJOR.MINOR.PATCH (allow optional pre/release ignored)
+if ! [[ "$current_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)([-+].*)?$ ]]; then
+  echo "VERSION ('$current_version') is not a valid semver MAJOR.MINOR.PATCH; aborting." >&2
+  exit 1
+fi
+
+major=${BASH_REMATCH[1]}
+minor=${BASH_REMATCH[2]}
+patch=${BASH_REMATCH[3]}
+
+# Increment patch
+new_patch=$((patch + 1))
+new_version="${major}.${minor}.${new_patch}"
+
+# Update VERSION file
+printf '%s\n' "$new_version" > "$VERSION_FILE"
+
+# Commit the change
+git add "$VERSION_FILE"
+# Use a deterministic commit message
+git commit -m "chore: bump VERSION -> ${new_version}" --no-verify
+
+# Push the commit to the same remote and branch before continuing original push.
+# Determine remote name and branch ref for push; prefer $REMOTE variable if it's a remote name
+# remote_ref often looks like refs/heads/main; convert to branch name
+if [[ "$remote_ref" =~ ^refs/heads/(.+)$ ]]; then
+  branch_name="${BASH_REMATCH[1]}"
+else
+  branch_name="$current_branch"
+fi
+
+# Push the new commit
+git push "$REMOTE" "HEAD:refs/heads/${branch_name}"
+
+# After successful push of the bump, allow original push to proceed (no explicit action needed).
+exit 0

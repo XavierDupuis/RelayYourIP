@@ -141,6 +141,13 @@ The `--build` flag ensures that the Docker image is rebuilt, incorporating any c
 
 **Note**: Ensure creating a `.env` file with the required environment variables before running the command above.
 
+## Contributing
+### On the main branch directly
+Make sure to set the git hooks to ensure VERSION bumps automatically for patches
+```bash
+git config core.hooksPath .githooks
+```
+
 ### Troubleshooting
 
 If you encounter issues or want to explore further configurations, refer to the [Docker Compose documentation](https://docs.docker.com/compose/).
