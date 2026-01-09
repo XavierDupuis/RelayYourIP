@@ -23,3 +23,9 @@ alerting:
   email:
     recipients: "ops@example.com"   # comma-separated list
     from: "ddns@example.com"
+
+# DNS verification settings
+dns_verification:
+  enabled: true                     # enable/disable DNS propagation verification
+  max_wait_seconds: 600             # maximum time to wait for DNS propagation (default: 600s = 10min)
+  base_retry_delay_seconds: 5       # initial retry delay, doubles exponentially (default: 5s)

@@ -1,10 +1,8 @@
 #!/bin/sh
 set -eu
 
-print() { printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')" "$1"; }
-log()   { print "🔵 $1"; }
-warn()  { print "🟠 $1"; }
-err()   { print "⛔ $1"; }
+# Source common utilities
+. "$(dirname "$0")/utils.sh"
 
 CONFIG_FILE="/app/config/config.yml"
 DATA_DIR="/app/data"
@@ -43,35 +41,7 @@ else
   printf "%s" "$$" > "$LOCK_FILE"
 fi
 
-now_epoch() { date +%s; }
-read_file_or_empty() { [ -f "$1" ] && cat "$1" || printf ""; }
 
-retry_exec() {
-  max=${1:-5}; shift || true
-  base_delay=${1:-1}; shift || true
-  cmd_str=$1; shift || true
-  n=0
-  delay=$base_delay
-  while :; do
-    if sh -c "$cmd_str"; then
-      return 0
-    fi
-    n=$((n+1))
-    if [ "$n" -ge "$max" ]; then
-      return 1
-    fi
-    sleep "$delay"
-    delay=$((delay*2))
-  done
-}
-
-curl_body_and_code() {
-  url="$1"
-  HTTP_CODE=""
-  resp=$(curl -sS -w "\n%{http_code}" --max-time 10 "$url") || true
-  HTTP_CODE=$(printf "%s" "$resp" | awk 'END{print}')
-  printf "%s" "$(printf "%s" "$resp" | sed '$d')"
-}
 
 log "Retrieving current public IP"
 current_ip=""
@@ -159,35 +129,7 @@ while [ "$i" -lt "$total_actions" ]; do
   fi
 done
 
-# DNS verification: use explicit domains_to_check
-resolvers="1.1.1.1 8.8.8.8 9.9.9.9"
-dns_ok_count=0
-dns_total=0
-
-for domain in $domains_to_check; do
-  dns_total=$((dns_total+1))
-  domain_ok=0
-  for r in $resolvers; do
-    out=$(dig +short @"$r" "$domain" A 2>/dev/null || printf "")
-    out_one=$(printf "%s" "$out" | awk 'NR==1{print}')
-    if [ "$out_one" = "$current_ip" ]; then
-      append_check "✓ DNS @$r for $domain -> $out_one"
-      domain_ok=1
-      dns_ok_count=$((dns_ok_count+1))
-      break
-    else
-      if [ -z "$out_one" ]; then
-        append_check "✗ DNS @$r for $domain -> (no answer)"
-      else
-        append_check "✗ DNS @$r for $domain -> $out_one"
-      fi
-    fi
-  done
-  if [ "$domain_ok" -eq 0 ]; then
-    append_check "✗ DNS verification failed for $domain"
-  fi
-done
-
+# Prepare checklist for notification
 overall_status="SUCCESS"
 if [ "$failure_count" -gt 0 ] && [ "$success_count" -gt 0 ]; then
   overall_status="PARTIAL"
@@ -195,65 +137,34 @@ elif [ "$failure_count" -gt 0 ] && [ "$success_count" -eq 0 ]; then
   overall_status="FAILURE"
 fi
 
-# Notifications (rate-limiting removed)
-title="[$LABEL] DDNS update — $overall_status"
-summary="IP: $current_ip
-Status: $overall_status
-actions: $action_count (ok:$success_count fail:$failure_count)
-DNS checks: $dns_ok_count / $dns_total
-Time: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
-"
 checklist_md=$(printf "%b" "$checklist")
 
-discord_url=$(yq eval '.alerting.discord.webhook_url // ""' "$CONFIG_FILE" 2>/dev/null || printf "")
-discord_mention=$(yq eval '.alerting.discord.mention // ""' "$CONFIG_FILE" 2>/dev/null || printf "")
-if [ -n "$discord_url" ] && [ "$discord_url" != "null" ]; then
-  case "$overall_status" in
-    SUCCESS) color=65280 ;;
-    PARTIAL) color=16753920 ;;
-    FAILURE) color=16711680 ;;
-    *) color=0 ;;
-  esac
-  max_len=1900
-  cb=$(printf "%s\n\n%s" "$summary" "$checklist_md")
-  if [ "$(printf "%s" "$cb" | wc -c | tr -d ' ')" -gt "$max_len" ]; then
-    cb="$(printf "%s" "$cb" | awk -v L=$max_len '{s=substr($0,1,L); print s"...[truncated]"}')"
-  fi
-  payload=$(jq -n --arg content "$discord_mention" --arg title "$title" --arg body "$cb" --argjson color "$color" \
-    '{content:$content, embeds:[{title:$title, description:$body, color:$color}] }')
-  if curl -sS -H "Content-Type: application/json" -X POST -d "$payload" "$discord_url" >/dev/null 2>&1; then
-    log "Discord notification sent."
-  else
-    warn "Discord notification failed."
-  fi
-fi
+# Add action results to checklist
+action_summary="
+---
+**Action Execution Summary**
+actions: $action_count (ok:$success_count fail:$failure_count)
+"
+checklist_md="${action_summary}${checklist_md}"
 
-webhook_url=$(yq eval '.alerting.webhook.url // ""' "$CONFIG_FILE" 2>/dev/null || printf "")
-webhook_token=$(yq eval '.alerting.webhook.bearer_token // ""' "$CONFIG_FILE" 2>/dev/null || printf "")
-if [ -n "$webhook_url" ] && [ "$webhook_url" != "null" ]; then
-  json=$(jq -n --arg label "$LABEL" --arg ip "$current_ip" --arg status "$overall_status" --arg checklist "$checklist_md" \
-    '{label:$label, ip:$ip, status:$status, checklist:$checklist}')
-  hdrs="-H Content-Type: application/json"
-  if [ -n "$webhook_token" ] && [ "$webhook_token" != "null" ]; then
-    hdrs="$hdrs -H Authorization: Bearer $webhook_token"
-  fi
-  if eval "curl -sS $hdrs -X POST -d \"\$json\" \"$webhook_url\" >/dev/null 2>&1"; then
-    log "Webhook notification sent."
-  else
-    warn "Webhook notification failed."
-  fi
-fi
+# Send initial notification with action results
+sh /app/scripts/notify.sh \
+  --config "$CONFIG_FILE" \
+  --label "$LABEL" \
+  --ip "$current_ip" \
+  --status "$overall_status" \
+  --checklist "$checklist_md" \
+  --msmtp-account "$MSMTP_ACCOUNT" || warn "Failed to send initial update notification."
 
-email_recipients=$(yq eval '.alerting.email.recipients // ""' "$CONFIG_FILE" 2>/dev/null || printf "")
-email_from=$(yq eval '.alerting.email.from // ""' "$CONFIG_FILE" 2>/dev/null || printf "")
-if [ -n "$email_recipients" ] && [ "$email_recipients" != "null" ]; then
-  subject="[$LABEL] DDNS update — $overall_status — $current_ip"
-  body="$(printf "%s\n\nactions:\n%s\n" "$summary" "$checklist_md")"
-  {
-    printf "Subject: %s\n" "$subject"
-    [ -n "$email_from" ] && printf "From: %s\n" "$email_from"
-    printf "\n%s\n" "$body"
-  } | msmtp -a "$MSMTP_ACCOUNT" "$email_recipients" >/dev/null 2>&1 && log "Email notification sent." || warn "Email notification failed."
+# Trigger background DNS verification if domains are configured
+if [ -n "$domains_to_check" ]; then
+  log "Triggering background DNS propagation verification..."
+  sh /app/scripts/verify_dns_propagation.sh \
+    --config "$CONFIG_FILE" \
+    --ip "$current_ip" \
+    --domains "$domains_to_check" \
+    >/dev/null 2>&1 &
+  # Note: Process runs in background; intentional fire-and-forget
 fi
 
 log "Finished update run: $overall_status"
