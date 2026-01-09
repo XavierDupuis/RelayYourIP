@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+
+# Runs on pushes to main branch: ensures VERSION follows MAJOR.MINOR.PATCH and is strictly incremented. 
+#   If pushed commits change VERSION, rejects the push unless the new VERSION > remote VERSION. 
+#   If VERSION wasn't updated, auto-bumps the patch, stages the file, blocks the push, and prompts the user to commit and push the new VERSION. 
+
 set -euo pipefail
 
 REMOTE="$1"
@@ -8,76 +13,130 @@ URL="$2"
 current_branch="$(git rev-parse --abbrev-ref HEAD)"
 
 if [[ "$current_branch" != "main" && "$current_branch" != "master" ]]; then
-  # allow push on other branches
   exit 0
 fi
 
-# ensure origin exists and fetch latest refs
 git remote get-url origin >/dev/null 2>&1 || { echo "Remote 'origin' not found."; exit 1; }
 git fetch origin --quiet
 
-# find the remote's branch ref (origin/main or origin/master)
-remote_branch_ref=""
-if git show-ref --verify --quiet "refs/remotes/origin/$current_branch"; then
-  remote_branch_ref="refs/remotes/origin/$current_branch"
-else
-  # remote branch doesn't exist yet — treat as changed (allow push)
+# if remote branch doesn't exist yet, allow push (new branch)
+if ! git show-ref --verify --quiet "refs/remotes/origin/$current_branch"; then
   exit 0
 fi
 
-# find the list of commits we're about to push
-# local tip and remote tip
 local_tip="$(git rev-parse "$current_branch")"
-remote_tip="$(git rev-parse "$remote_branch_ref")"
+remote_tip="$(git rev-parse "refs/remotes/origin/$current_branch")"
 
-# if identical, nothing to push
 if [[ "$local_tip" == "$remote_tip" ]]; then
   exit 0
 fi
 
-# get list of files changed between remote_tip and local_tip (only commits being pushed)
 changed_files="$(git diff --name-only "$remote_tip" "$local_tip")"
 
-# if VERSION file was modified among those changes, allow push
-if echo "$changed_files" | grep -xq "VERSION"; then
-  exit 0
+# helper: parse semver (returns major minor patch)
+parse_semver() {
+  local v="$1"
+  if [[ "$v" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)($|[^0-9].*) ]]; then
+    echo "${BASH_REMATCH[1]} ${BASH_REMATCH[2]} ${BASH_REMATCH[3]}"
+    return 0
+  fi
+  return 1
+}
+
+# helper: compare semver; returns 0 if a > b, 1 otherwise
+semver_gt() {
+  read -r a_major a_minor a_patch <<<"$(parse_semver "$1")" || return 1
+  read -r b_major b_minor b_patch <<<"$(parse_semver "$2")" || return 1
+  if (( a_major > b_major )); then return 0; fi
+  if (( a_major < b_major )); then return 1; fi
+  if (( a_minor > b_minor )); then return 0; fi
+  if (( a_minor < b_minor )); then return 1; fi
+  if (( a_patch > b_patch )); then return 0; fi
+  return 1
+}
+
+# read remote VERSION (from remote_tip)
+remote_version=""
+if git cat-file -e "$remote_tip:VERSION" 2>/dev/null; then
+  remote_version="$(git show "$remote_tip:VERSION" | tr -d ' \t\n\r')"
+else
+  # no remote VERSION -> allow push (treat as initial)
+  remote_version=""
 fi
 
-# At this point: pushing to main and VERSION was NOT modified. Block push.
+# read local (to-be-pushed) VERSION (from local_tip)
+local_version=""
+if git cat-file -e "$local_tip:VERSION" 2>/dev/null; then
+  local_version="$(git show "$local_tip:VERSION" | tr -d ' \t\n\r')"
+else
+  local_version=""
+fi
+
+# If VERSION was modified in the push:
+if echo "$changed_files" | grep -xq "VERSION"; then
+  # Ensure both versions exist and local_version > remote_version
+  if [[ -z "$remote_version" ]]; then
+    # remote has no VERSION, allow if local has a valid semver
+    if ! parse_semver "$local_version" >/dev/null 2>&1; then
+      echo "Invalid VERSION in pushed commits: '$local_version'. Aborting push."
+      exit 1
+    fi
+    exit 0
+  fi
+
+  if ! parse_semver "$remote_version" >/dev/null 2>&1; then
+    echo "Remote VERSION invalid: '$remote_version'. Aborting push."
+    exit 1
+  fi
+  if ! parse_semver "$local_version" >/dev/null 2>&1; then
+    echo "Local VERSION invalid: '$local_version'. Aborting push."
+    exit 1
+  fi
+
+  if semver_gt "$local_version" "$remote_version"; then
+    exit 0
+  else
+    echo "Push blocked: pushed VERSION ($local_version) is not greater than remote VERSION ($remote_version)."
+    echo "Please increment VERSION (MAJOR.MINOR.PATCH) and try again."
+    exit 1
+  fi
+fi
+
+# VERSION was NOT modified in the push -> auto-bump patch locally and stage
 if [[ ! -f VERSION ]]; then
   echo "VERSION file not found at repo root. Aborting push."
   exit 1
 fi
 
-# read current semver
 current_version="$(tr -d ' \t\n\r' < VERSION || true)"
 if [[ -z "$current_version" ]]; then
   echo "VERSION file is empty. Aborting push."
   exit 1
 fi
 
-# parse semver (MAJOR.MINOR.PATCH), allow optional pre-release/build ignored
-if [[ "$current_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(.*)$ ]]; then
-  major="${BASH_REMATCH[1]}"
-  minor="${BASH_REMATCH[2]}"
-  patch="${BASH_REMATCH[3]}"
-  suffix="${BASH_REMATCH[4]}"
-else
-  echo "VERSION does not match MAJOR.MINOR.PATCH format: '$current_version'. Aborting push."
+if ! parse_semver "$current_version" >/dev/null 2>&1; then
+  echo "VERSION does not match MAJOR.MINOR.PATCH: '$current_version'. Aborting push."
   exit 1
 fi
 
-# increment patch
+read -r major minor patch <<<"$(parse_semver "$current_version")"
 new_patch=$((patch + 1))
-new_version="${major}.${minor}.${new_patch}${suffix}"
+new_version="${major}.${minor}.${new_patch}"
 
-# write new VERSION
+# Ensure new_version is greater than remote_version (if remote exists)
+if [[ -n "$remote_version" ]]; then
+  if ! semver_gt "$new_version" "$remote_version"; then
+    # if equal or not greater (shouldn't happen), bump until greater
+    while ! semver_gt "$new_version" "$remote_version"; do
+      new_patch=$((new_patch + 1))
+      new_version="${major}.${minor}.${new_patch}"
+    done
+  fi
+fi
+
 printf "%s\n" "$new_version" > VERSION
-
-# stage the change
 git add VERSION
 
-# instruct user to commit and push
 cat <<EOF
 
 Push blocked: you attempted to push to '$current_branch' without updating VERSION.
@@ -89,9 +148,6 @@ The new VERSION file has been staged. Please run:
   git commit -m "Bump VERSION to $new_version"
   git push
 
-(If you want to change versioning behavior, modify .git/hooks/pre-push.)
-
 EOF
 
-# prevent the push
 exit 1
